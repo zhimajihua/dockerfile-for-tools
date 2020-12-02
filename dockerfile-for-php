@@ -1,0 +1,54 @@
+FROM phpswoole/swoole:4.5.9-php7.4-alpine
+
+MAINTAINER QHJ <mu@zhimajihua.com>
+
+ARG SEASLOG_VERSION="2.1.0"
+ARG YAF_VERSION="3.0.9"
+ARG SWOOLE_VERSION="4.5.2"
+
+COPY project/ /var/www/
+RUN cp /var/www/lib/Config.php.master /var/www/lib/Config.php \
+    && cp /var/www/apps/conf/app.ini.master /var/www/apps/conf/app.ini \
+    && cp /var/www/lib/RedisDb.php.master /var/www/lib/RedisDb.php \
+    && sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories \
+    && apk add -U tzdata \
+    && cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
+    && apk del tzdata \
+    && apk add --no-cache bzip2 zlib libzip libxml2 gmp libpng \
+    && apk add --no-cache --virtual .build-deps $PHPIZE_DEPS bzip2-dev zlib-dev libzip-dev libxml2-dev gmp-dev libpng-dev supervisor \
+    && echo "[program:dev-api]" >> /etc/supervisord.conf \
+    && echo "command=/usr/local/bin/php /var/www/apps/server/HttpServer.php" >> /etc/supervisord.conf \
+    && sed -i "s@;nodaemon=false@nodaemon=true@g" /etc/supervisord.conf \
+    && cd /tmp && mkdir phpexpand && cd phpexpand \
+    && wget https://pecl.php.net/get/SeasLog-${SEASLOG_VERSION}.tgz \
+    && wget https://pecl.php.net/get/yaf-${YAF_VERSION}.tgz \
+    && wget https://pecl.php.net/get/swoole-${SWOOLE_VERSION}.tgz \
+    && tar zxvf SeasLog-${SEASLOG_VERSION}.tgz \
+    && tar zxvf yaf-${YAF_VERSION}.tgz \
+    && tar zxvf swoole-${SWOOLE_VERSION}.tgz \
+    && mv SeasLog-${SEASLOG_VERSION} seaslog \
+    && mv yaf-${YAF_VERSION} yaf \
+    && mv swoole-${SWOOLE_VERSION} swoole \
+    && docker-php-ext-enable opcache \
+    && docker-php-ext-install /tmp/phpexpand/seaslog \
+    && docker-php-ext-install /tmp/phpexpand/yaf \
+    && docker-php-ext-install /tmp/phpexpand/swoole \
+    && docker-php-ext-enable seaslog \
+    && docker-php-ext-enable yaf \
+    && docker-php-ext-enable swoole \
+    && rm -rf /tmp/phpexpand \
+    && docker-php-ext-install calendar bz2 zip soap iconv exif gmp bcmath sockets mysqli pdo_mysql opcache \
+    && docker-php-ext-enable calendar bz2 zip soap iconv exif gmp bcmath sockets mysqli pdo_mysql opcache \
+    && docker-php-ext-install -j$(nproc) gd \
+    && pecl install redis protobuf \
+    && docker-php-ext-enable redis protobuf \
+    && mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
+    && cd /tmp \
+    && wget https://pecl.php.net/get/msgpack-2.1.1.tgz \
+    && tar zxvf msgpack-2.1.1.tgz \
+    && mv msgpack-2.1.1 msgpack \
+    && docker-php-ext-install /tmp/msgpack \
+    && docker-php-ext-enable  msgpack \
+    && rm -rf msgpack-2.1.1.tgz msgpack
+EXPOSE 8100
+CMD ["/usr/bin/supervisord"]
