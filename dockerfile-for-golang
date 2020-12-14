@@ -1,0 +1,36 @@
+FROM golang:1.15-alpine3.12
+
+MAINTAINER Qiuhj <mu@zhimajihua.com>
+
+ENV GOPROXY=https://goproxy.cn,direct 
+ENV GO111MODULE="on"
+
+WORKDIR /go/src/app
+ 
+COPY . .
+
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o beegoTool
+
+FROM alpine:3.12
+ 
+WORKDIR /
+
+COPY --from=0 /go/src/app/beegoTool .
+
+# ADD docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories \
+    && apk update \
+    && ln -s /beegoTool /usr/bin \
+    #&& mkdir -p /logs \
+#   && chmod +x /usr/local/bin/docker-entrypoint.sh \
+    && apk add --no-cache -U tzdata \
+    && apk add openjdk8 busybox tzdata curl \
+    && cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
+    && mkdir /conf
+
+COPY --from=0 /go/src/app/conf/app.conf.master /conf/app.conf 
+
+ENTRYPOINT ["/beegoTool"]
+ 
+STOPSIGNAL SIGQUIT
